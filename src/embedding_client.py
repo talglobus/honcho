@@ -121,6 +121,32 @@ def _publish_embedding_event(
                 run_id=get_embedding_run_id(),
             )
         )
+
+        # render fork: local usage sink — see executor._emit_llm_call_completed
+        # for rationale. input_tokens_estimate is tiktoken-based (the embeddings
+        # API reports no usage), which is plenty for cost accounting at
+        # embedding prices.
+        logger.info(
+            "embedding_usage purpose=%s model=%s outcome=%s input_count=%d input_tokens_estimate=%d duration_ms=%.0f",
+            purpose_slug,
+            model,
+            outcome,
+            input_count,
+            input_tokens_estimate,
+            duration_ms,
+        )
+        if settings.COLLECT_METRICS_LOCAL:
+            from src.telemetry.metrics_collector import append_metrics_to_file
+
+            append_metrics_to_file(
+                "embedding_usage",
+                f"{purpose_slug or 'unknown'}_{model}",
+                [
+                    ("input_count", input_count, "count"),
+                    ("input_tokens_estimate", input_tokens_estimate, "tokens"),
+                    ("outcome", outcome, ""),
+                ],
+            )
     except Exception:  # pragma: no cover - telemetry must not raise
         logger.debug("Failed to emit EmbeddingCallCompletedEvent", exc_info=True)
 

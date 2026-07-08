@@ -213,6 +213,47 @@ def _emit_llm_call_completed(
                 iteration=(telemetry.iteration if telemetry else None),
             )
         )
+
+        # render fork: exact provider-reported usage previously had NO local
+        # sink — emit() above only reaches an external CloudEvents backend, and
+        # the Prometheus/Langfuse copies are disabled on this deploy. One INFO
+        # line per call (token counts and labels only, never content) makes
+        # cost measurable from the service's own logs; with
+        # COLLECT_METRICS_LOCAL the same numbers also append to
+        # LOCAL_METRICS_FILE for machine summing (e.g. a backfill run).
+        logger.info(
+            "llm_usage purpose=%s model=%s outcome=%s input_tokens=%d output_tokens=%d cache_read_tokens=%d cache_creation_tokens=%d duration_ms=%.0f",
+            (telemetry.call_purpose if telemetry else None),
+            model,
+            outcome,
+            (result.input_tokens if result else 0),
+            ((result.output_tokens or 0) if result else 0),
+            ((result.cache_read_input_tokens or 0) if result else 0),
+            ((result.cache_creation_input_tokens or 0) if result else 0),
+            duration_ms,
+        )
+        if settings.COLLECT_METRICS_LOCAL:
+            from src.telemetry.metrics_collector import append_metrics_to_file
+
+            append_metrics_to_file(
+                "llm_usage",
+                f"{telemetry.call_purpose if telemetry else 'unknown'}_{model}",
+                [
+                    ("input_tokens", result.input_tokens if result else 0, "tokens"),
+                    ("output_tokens", (result.output_tokens or 0) if result else 0, "tokens"),
+                    (
+                        "cache_read_tokens",
+                        (result.cache_read_input_tokens or 0) if result else 0,
+                        "tokens",
+                    ),
+                    (
+                        "cache_creation_tokens",
+                        (result.cache_creation_input_tokens or 0) if result else 0,
+                        "tokens",
+                    ),
+                    ("outcome", outcome, ""),
+                ],
+            )
     except Exception:  # pragma: no cover - telemetry must not raise
         logger.debug("Failed to emit LLMCallCompletedEvent", exc_info=True)
 
