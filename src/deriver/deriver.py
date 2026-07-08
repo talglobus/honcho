@@ -244,6 +244,31 @@ async def process_representation_tasks_batch(
         "count",
     )
 
+    # render fork: session + exact provider-reported usage on the per-unit
+    # metrics entry (INFO line / COLLECT_METRICS_LOCAL file). The executor's
+    # llm_usage line records the same tokens but cannot know the session; the
+    # session key is what lets an offline pass group units and simulate
+    # alternative REPRESENTATION_BATCH_MAX_AGE_SECONDS batching from a real
+    # run's data. Ids and counts only — never content.
+    accumulate_metric(
+        f"minimal_deriver_{latest_message.id}_{observed}",
+        "session_name",
+        latest_message.session_name,
+        "id",
+    )
+    accumulate_metric(
+        f"minimal_deriver_{latest_message.id}_{observed}",
+        "total_input_tokens",
+        response.input_tokens,
+        "tokens",
+    )
+    accumulate_metric(
+        f"minimal_deriver_{latest_message.id}_{observed}",
+        "output_tokens",
+        response.output_tokens or 0,
+        "tokens",
+    )
+
     if settings.DERIVER.LOG_OBSERVATIONS:
         # Log messages fed into deriver
         accumulate_metric(
