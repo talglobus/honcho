@@ -217,8 +217,14 @@ async def process_representation_tasks_batch(
                 )
                 successful_observer_count += 1
             except Exception as e:
+                # Log the error TYPE only: str(e) on a DB save error can embed
+                # the failing parameter value — the derived observation text,
+                # i.e. personal facts — into WARNING-level platform logs.
                 logger.error(
-                    "Failed to save representation for observer %s: %s", observer, e
+                    "Failed to save representation for observer %s: %s (%s)",
+                    observer,
+                    type(e).__name__,
+                    getattr(e, "sqlstate", None) or getattr(e, "code", "no-code"),
                 )
 
     # Log metrics
